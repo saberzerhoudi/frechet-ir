@@ -1,0 +1,42 @@
+[tool.poetry]
+name = "frechet-ir"
+version = "0.2.1"
+description = "Fréchet Distance for evaluating simulated search sessions against real user behavior"
+authors = ["Saber Zerhoudi <szerhoudi@acm.org>"]
+license = "MIT"
+readme = "README.md"
+packages = [{ include = "frechet_ir", from = "src" }]
+repository = "https://github.com/saberzerhoudi/frechet-ir"
+keywords = ["information-retrieval", "session-evaluation", "frechet-distance", "user-simulation"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+numpy = "^2.0.0"
+scipy = "^1.14.0"
+scikit-learn = "^1.5.0"
+tqdm = "^4.66.0"
+sentence-transformers = { version = "^3.0.0", optional = true }
+
+[tool.poetry.extras]
+bert = ["sentence-transformers"]
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.0.0"
+mypy = "^1.11.0"
+black = "^24.0.0"
+ruff = "^0.6.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
