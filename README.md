@@ -355,6 +355,22 @@ print(f"Best simulator: {best_simulator} (FD={results[best_simulator]:.4f})")
 
 ---
 
+## Citation
+
+If you use this library in your research, please cite:
+
+```bibtex
+@inproceedings{Zerhoudi:2024:IIR,
+  title={Beyond Conventional Metrics: Assessing User Simulators in Information Retrieval},
+  author={Zerhoudi, Saber and Granitzer, Michael},
+  booktitle={Proceedings of the 14th Italian Information Retrieval Workshop (IIR 2024)},
+  pages={3--12},
+  year={2024}
+}
+```
+
+---
+
 ## License
 
 MIT License - see [LICENSE](LICENSE) for details.
