@@ -17,7 +17,15 @@ from .session_fd import (
     frechet_sessions,
     frechet_sessions_sequential,
 )
-from .embedding import ActionEmbedder, TfidfActionEmbedder, BertActionEmbedder
+from .embedding import (
+    ActionEmbedder,
+    TfidfActionEmbedder,
+    BertActionEmbedder,
+    BertModelPreset,
+    Word2VecActionEmbedder,
+    Session2VecEmbedder,
+    MeanPooledSessionEmbedder,
+)
 from .loader import (
     load_sessions_from_json,
     load_sessions_from_csv,
@@ -50,6 +58,10 @@ __all__ = [
     "ActionEmbedder",
     "TfidfActionEmbedder",
     "BertActionEmbedder",
+    "BertModelPreset",
+    "Word2VecActionEmbedder",
+    "Session2VecEmbedder",
+    "MeanPooledSessionEmbedder",
     # Data loading
     "load_sessions_from_json",
     "load_sessions_from_csv",
@@ -62,4 +74,3 @@ __all__ = [
     # Curve-based FD
     "discrete_frechet_distance",
 ]
-

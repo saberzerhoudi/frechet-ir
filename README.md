@@ -348,10 +348,82 @@ print(f"Best simulator: {best_simulator} (FD={results[best_simulator]:.4f})")
 
 ### Embedders
 
+**Action-level embedders** (embed individual actions):
+
 | Class | Key Parameters | Description |
 |-------|----------------|-------------|
-| `TfidfActionEmbedder` | `n_components=64`, `standardize=True`, `clip_outliers=True` | TF-IDF + SVD dimensionality reduction |
-| `BertActionEmbedder` | `model_name="all-MiniLM-L6-v2"`, `standardize=True` | Sentence-transformer embeddings |
+| `TfidfActionEmbedder` | `n_components=64` | TF-IDF + SVD (LSA-style) |
+| `BertActionEmbedder` | `model_name` | Sentence-transformer embeddings |
+| `Word2VecActionEmbedder` | `model_name` | Mean-pooled word embeddings |
+
+**Session-level embedders** (embed entire sessions):
+
+| Class | Description |
+|-------|-------------|
+| `Session2VecEmbedder` | Doc2Vec adapted for sessions |
+| `MeanPooledSessionEmbedder` | Aggregates action embeddings via mean pooling |
+
+**When to use each level:**
+
+| Level | Best for | Granularity | FD Magnitude |
+|-------|----------|-------------|--------------|
+| **Action-level** | Precise action-by-action behavior comparison | High (individual clicks/queries) | Higher |
+| **Session-level** | Overall session trajectory comparison | Low (aggregated) | Lower |
+
+> **Tip:** Session-level embeddings (mean pooling) smooth out per-action noise, resulting in lower FD values. This doesn't mean "better simulation" - it captures less granular information. Use action-level for detailed behavioral analysis.
+
+### Embedder Selection Guide
+
+| Embedder | Use Case | Speed | External Deps | Semantic Depth |
+|----------|----------|-------|---------------|----------------|
+| **TfidfActionEmbedder** | Quick lexical comparison, baseline | Fast | None | Basic |
+| **BertActionEmbedder** | Deep semantic understanding of queries | Slow | sentence-transformers | Deep |
+| **Word2VecActionEmbedder** | Classic word semantics, lightweight | Fast | gensim | Medium |
+| **Session2VecEmbedder** | Session-level trajectory patterns | Medium | gensim | Medium |
+| **MeanPooledSessionEmbedder** | Smoothed session comparison | Fast | Varies | Varies |
+
+**Detailed recommendations:**
+
+- **TF-IDF + SVD**: Start here. Fast, no GPU needed, captures lexical overlap. Best for initial experiments.
+
+- **BERT (MiniLM/MSMARCO)**: Use when query semantics matter (e.g., "laptop" vs "notebook"). MSMARCO models are optimized for search tasks.
+
+- **Word2Vec/GloVe**: Good middle ground between speed and semantics. Captures word-level meaning without transformer overhead.
+
+- **Session2Vec**: Best for session-level trajectory analysis. Learns session patterns directly from your data.
+
+- **MeanPooled**: Use when you want session-level FD but with action-level embedders. Aggregates action embeddings via averaging.
+
+**nFD Normalization Methods:**
+
+| Method | Formula | When to Use |
+|--------|---------|-------------|
+| **Random Baseline** | `1 - FD/FD_random` | Default. Compare models against random chance. |
+| **Sigmoid** | `exp(-FD/τ)` | Consistent [0,1] scale across different datasets. |
+| **Self-Distance** | `1 - FD/(FD+FD_self)` | Compare to natural variation in real data. |
+
+**BERT Model Presets** (`BertModelPreset`):
+
+```python
+from frechet_ir import BertActionEmbedder, BertModelPreset
+
+# Use preset enum
+embedder = BertActionEmbedder(model_name=BertModelPreset.MSMARCO_MINILM)
+
+# Or use string directly
+embedder = BertActionEmbedder(model_name="all-mpnet-base-v2")
+```
+
+| Preset | Model Name | Dim | Notes |
+|--------|------------|-----|-------|
+| `MINILM_L6` | all-MiniLM-L6-v2 | 384 | Fast, good quality (default) |
+| `MINILM_L12` | all-MiniLM-L12-v2 | 384 | Better quality |
+| `MPNET_BASE` | all-mpnet-base-v2 | 768 | Best quality |
+| `MSMARCO_MINILM` | msmarco-MiniLM-L6-cos-v5 | 384 | Search-optimized |
+| `MSMARCO_DISTILBERT` | msmarco-distilbert-cos-v5 | 768 | Search-optimized |
+| `E5_SMALL` | intfloat/e5-small-v2 | 384 | State-of-the-art |
+| `E5_BASE` | intfloat/e5-base-v2 | 768 | State-of-the-art |
+| `MULTILINGUAL` | paraphrase-multilingual-MiniLM-L12-v2 | 384 | 50+ languages |
 
 ---
 
