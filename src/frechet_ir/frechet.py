@@ -265,3 +265,174 @@ def frechet_from_samples(
         clip_outliers=clip_outliers,
     )
     return frechet_gaussians(real_stats, sim_stats, eps=eps)
+
+
+def _matrix_inv_sqrt(A: Array2D, eps: float = 1e-6) -> Array2D:
+    """
+    Compute the inverse square root of a symmetric positive definite matrix.
+    
+    Uses eigendecomposition for numerical stability.
+    """
+    A_reg = A + np.eye(A.shape[0], dtype=np.float64) * eps
+    
+    # Eigendecomposition for symmetric matrices
+    eigvals, eigvecs = np.linalg.eigh(A_reg)
+    eigvals = np.maximum(eigvals, eps)  # Ensure positive
+    inv_sqrt_eigvals = 1.0 / np.sqrt(eigvals)
+    
+    return eigvecs @ np.diag(inv_sqrt_eigvals) @ eigvecs.T
+
+
+def _matrix_sqrt(A: Array2D, eps: float = 1e-6) -> Array2D:
+    """
+    Compute the square root of a symmetric positive definite matrix.
+    
+    Falls back to eigendecomposition if scipy.linalg.sqrtm fails.
+    """
+    A_reg = A + np.eye(A.shape[0], dtype=np.float64) * eps
+    sqrtA, info = linalg.sqrtm(A_reg, disp=False)
+    
+    if not np.isfinite(sqrtA).all() or info != 0:
+        # Fallback: eigendecomposition
+        eigvals, eigvecs = np.linalg.eigh(A_reg)
+        eigvals = np.maximum(eigvals, eps)
+        sqrtA = eigvecs @ np.diag(np.sqrt(eigvals)) @ eigvecs.T
+    
+    if np.iscomplexobj(sqrtA):
+        sqrtA = sqrtA.real
+    
+    return sqrtA
+
+
+def whitened_frechet_gaussians(
+    g_real: GaussianStats,
+    g_sim: GaussianStats,
+    *,
+    eps: float = 1e-6,
+) -> float:
+    """
+    Compute the whitened Fréchet distance between two Gaussian distributions.
+    
+    This transforms to a coordinate system where the real distribution has
+    identity covariance, making the distance scale-invariant and comparable
+    across different embedders.
+    
+    The whitened FD is computed as:
+        μ̃ = Σ_real^{-1/2} (μ_sim - μ_real)
+        Σ̃ = Σ_real^{-1/2} Σ_sim Σ_real^{-1/2}
+        FD_whitened = ||μ̃||² + tr(Σ̃ + I - 2 Σ̃^{1/2})
+    
+    Parameters
+    ----------
+    g_real : GaussianStats
+        Gaussian parameters for the real/reference distribution.
+    g_sim : GaussianStats
+        Gaussian parameters for the simulated distribution.
+    eps : float, optional
+        Small diagonal regularizer for numerical stability.
+    
+    Returns
+    -------
+    float
+        Whitened Fréchet distance. Interpretation:
+        - 0 = identical distributions
+        - Values are in "standard deviation units" from the real distribution
+        - Scale-invariant: comparable across different embedders
+    
+    Notes
+    -----
+    Unlike standard FD, whitened FD is not affected by the absolute scale
+    of embedding dimensions. This is useful when comparing results from
+    different embedders (e.g., TF-IDF vs BERT).
+    """
+    mu_real, sigma_real = g_real.mean, g_real.cov
+    mu_sim, sigma_sim = g_sim.mean, g_sim.cov
+    
+    if mu_real.shape != mu_sim.shape:
+        raise ValueError(
+            f"Mean vectors must have same shape; got {mu_real.shape} and {mu_sim.shape}"
+        )
+    if sigma_real.shape != sigma_sim.shape:
+        raise ValueError(
+            f"Covariance matrices must have same shape; got {sigma_real.shape} and {sigma_sim.shape}"
+        )
+    
+    n = sigma_real.shape[0]
+    
+    # Compute Σ_real^{-1/2}
+    A = _matrix_inv_sqrt(sigma_real, eps)
+    
+    # Whitened mean difference: μ̃ = Σ_real^{-1/2} (μ_sim - μ_real)
+    mu_diff = mu_sim - mu_real
+    mu_whitened = A @ mu_diff
+    mean_term = float(mu_whitened @ mu_whitened)
+    
+    # Whitened covariance: Σ̃ = Σ_real^{-1/2} Σ_sim Σ_real^{-1/2}
+    sigma_whitened = A @ sigma_sim @ A.T
+    
+    # Trace term: tr(Σ̃ + I - 2 Σ̃^{1/2})
+    sqrt_sigma_whitened = _matrix_sqrt(sigma_whitened, eps)
+    trace_term = np.trace(sigma_whitened) + n - 2 * np.trace(sqrt_sigma_whitened)
+    
+    fd_whitened = mean_term + float(trace_term)
+    return float(max(fd_whitened, 0.0))
+
+
+def whitened_frechet_from_samples(
+    real: ArrayLike,
+    simulated: ArrayLike,
+    *,
+    eps: float = 1e-6,
+    use_shrinkage: bool = True,
+    clip_outliers: bool = True,
+) -> float:
+    """
+    Compute whitened Fréchet distance from samples (scale-invariant).
+    
+    This is a scale-invariant version of FD that is comparable across
+    different embedders. It transforms to a coordinate system where
+    the real distribution has identity covariance.
+    
+    Parameters
+    ----------
+    real : array-like, shape (n_real, d)
+        Embeddings for the real actions or sessions.
+    simulated : array-like, shape (n_sim, d)
+        Embeddings for the simulated actions or sessions.
+    eps : float, optional
+        Diagonal regularizer for numerical stability.
+    use_shrinkage : bool
+        If True, use Ledoit-Wolf shrinkage for covariance estimation.
+    clip_outliers : bool
+        If True, clip outliers before estimation.
+    
+    Returns
+    -------
+    float
+        Whitened Fréchet distance (scale-invariant).
+    
+    See Also
+    --------
+    frechet_from_samples : Standard (non-whitened) Fréchet distance.
+    whitened_frechet_gaussians : Whitened FD from pre-computed Gaussian stats.
+    
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from frechet_ir import whitened_frechet_from_samples
+    >>> real = np.random.randn(100, 64)
+    >>> sim = np.random.randn(100, 64) + 0.5
+    >>> fd = whitened_frechet_from_samples(real, sim)
+    """
+    real_stats = estimate_gaussian(
+        real,
+        use_shrinkage=use_shrinkage,
+        clip_outliers=clip_outliers,
+    )
+    sim_stats = estimate_gaussian(
+        simulated,
+        use_shrinkage=use_shrinkage,
+        clip_outliers=clip_outliers,
+    )
+    return whitened_frechet_gaussians(real_stats, sim_stats, eps=eps)
+

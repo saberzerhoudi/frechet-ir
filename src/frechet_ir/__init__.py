@@ -10,6 +10,8 @@ from .frechet import (
     estimate_gaussian,
     frechet_gaussians,
     frechet_from_samples,
+    whitened_frechet_gaussians,
+    whitened_frechet_from_samples,
 )
 from .model import Action, Session
 from .session_fd import (
@@ -47,6 +49,8 @@ __all__ = [
     "estimate_gaussian",
     "frechet_gaussians",
     "frechet_from_samples",
+    "whitened_frechet_gaussians",
+    "whitened_frechet_from_samples",
     # Data models
     "Action",
     "Session",

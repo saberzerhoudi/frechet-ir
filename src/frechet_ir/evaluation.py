@@ -16,7 +16,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from .embedding import ActionEmbedder, TfidfActionEmbedder
-from .frechet import frechet_from_samples
+from .frechet import frechet_from_samples, whitened_frechet_from_samples
 from .model import Action, Session
 from .session_fd import frechet_sessions, frechet_sessions_sequential
 
@@ -35,6 +35,9 @@ class NFDMethod(str, Enum):
     
     SELF_DISTANCE = "self_distance"
     """nFD = 1 - FD/(FD + FD_self), where FD_self is FD of real data split in half."""
+    
+    WHITENED = "whitened"
+    """Scale-invariant FD via whitening w.r.t. real distribution's covariance."""
 
 
 @dataclass
@@ -217,7 +220,7 @@ def evaluate_sessions_fd(
     truncate_queries: Optional[int] = None,
     limit_sessions: Optional[int] = None,
     compute_nfd: bool = False,
-    nfd_method: Union[NFDMethod, Literal["random", "sigmoid", "self_distance"]] = "random",
+    nfd_method: Union[NFDMethod, Literal["random", "sigmoid", "self_distance", "whitened"]] = "random",
     nfd_n_shuffles: int = 10,
     nfd_temperature: float = 1.0,
 ) -> FDResult:
@@ -238,7 +241,7 @@ def evaluate_sessions_fd(
         If provided, evaluate only the first N sessions.
     compute_nfd : bool
         If True, compute normalized FD (nFD).
-    nfd_method : {"random", "sigmoid", "self_distance"}
+    nfd_method : {"random", "sigmoid", "self_distance", "whitened"}
         Normalization method to use:
         
         - "random" (default): nFD = 1 - FD/FD_random
@@ -252,6 +255,11 @@ def evaluate_sessions_fd(
         - "self_distance": nFD = 1 - FD/(FD + FD_self)
           Where FD_self is FD of real data split in half.
           Interpretation: 1 = perfect, 0.5 = FD equals natural variation.
+        
+        - "whitened": Scale-invariant FD via whitening.
+          Transforms embeddings so real distribution has identity covariance.
+          Useful for comparing across different embedders.
+          Returns unbounded value (lower = better, like standard FD).
           
     nfd_n_shuffles : int
         Number of shuffles for "random" method (default: 10).
@@ -344,6 +352,14 @@ def evaluate_sessions_fd(
             nfd_reference = _compute_self_distance_fd(real_emb, n_splits=nfd_n_shuffles)
             nfd_global = _normalize_fd_self_distance(fd_global, nfd_reference)
             nfd_per_session = _normalize_fd_self_distance(fd_per_session, nfd_reference)
+            
+        elif nfd_method == NFDMethod.WHITENED:
+            # Method 4: Whitened (scale-invariant) FD
+            # This computes a new FD in whitened space, not a normalization
+            nfd_global = whitened_frechet_from_samples(real_emb, sim_emb)
+            nfd_per_session = nfd_global  # Use same value for simplicity
+            nfd_reference = None  # No reference FD for whitening
+            nfd_method_str = "whitened"
 
     return FDResult(
         fd_S_M=fd_global,

@@ -289,6 +289,14 @@ result = evaluate_sessions_fd(
 )
 
 print(f"nFD: {result.nfd_S_M:.4f}")  # Range [0, 1]
+
+# Method 4: Whitened (scale-invariant) - for cross-embedder comparison
+result = evaluate_sessions_fd(
+    real_sessions, simulated_sessions,
+    compute_nfd=True,
+    nfd_method="whitened",
+)
+print(f"Whitened FD: {result.nfd_S_M:.4f}")  # Lower = better (unbounded)
 ```
 
 | Method | Formula | Interpretation |
@@ -296,6 +304,7 @@ print(f"nFD: {result.nfd_S_M:.4f}")  # Range [0, 1]
 | **Random Baseline** | `nFD = 1 - FD/FD_random` | 1 = perfect, 0 = no better than random |
 | **Sigmoid** | `nFD = exp(-FD/τ)` | 1 = perfect, smooth decay to 0 |
 | **Self-Distance** | `nFD = 1 - FD/(FD + FD_self)` | 1 = perfect, 0.5 = matches natural variation |
+| **Whitened** | Scale-invariant FD | Lower = better (not bounded to [0,1]) |
 
 ### Relative Comparisons
 
@@ -324,6 +333,8 @@ print(f"Best simulator: {best_simulator} (FD={results[best_simulator]:.4f})")
 | `frechet_from_samples(real, sim)` | Compute FD from embedding arrays |
 | `frechet_gaussians(g1, g2)` | Compute FD between Gaussian stats |
 | `estimate_gaussian(x)` | Estimate mean/covariance from samples |
+| `whitened_frechet_from_samples(real, sim)` | **Scale-invariant FD** (new) |
+| `whitened_frechet_gaussians(g1, g2)` | Whitened FD between Gaussian stats |
 
 > **Robustness options** for `frechet_from_samples` and `estimate_gaussian`:
 > - `use_shrinkage=True`: Ledoit-Wolf shrinkage for stable covariance
@@ -401,6 +412,7 @@ print(f"Best simulator: {best_simulator} (FD={results[best_simulator]:.4f})")
 | **Random Baseline** | `1 - FD/FD_random` | Default. Compare models against random chance. |
 | **Sigmoid** | `exp(-FD/τ)` | Consistent [0,1] scale across different datasets. |
 | **Self-Distance** | `1 - FD/(FD+FD_self)` | Compare to natural variation in real data. |
+| **Whitened** | Scale-invariant transform | Compare across different embedders (TF-IDF vs BERT). |
 
 **BERT Model Presets** (`BertModelPreset`):
 
